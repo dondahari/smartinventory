@@ -1,4 +1,4 @@
-import { CompsResponse, ResalePlatform } from '@/types/inventory';
+import { CompsResponse, ResalePlatform, PriceChartingTiers, AutofillSuggestion } from '@/types/inventory';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface FetchCompsParams {
@@ -11,6 +11,50 @@ interface FetchCompsParams {
 
 const PREFERRED_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
 
+// High quality curated product imagery lookup based on query keywords
+export function getRepresentativeProductImage(query: string): string {
+  const q = query.toLowerCase();
+
+  if (q.includes('pacman') || q.includes('pac-man') || q.includes('fever')) {
+    return 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80'; // Retro Pac-Man Arcade / Record
+  }
+  if (q.includes('jordan') || q.includes('sneaker') || q.includes('nike') || q.includes('yeezy') || q.includes('dunk')) {
+    return 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80'; // Air Jordan Sneakers
+  }
+  if (q.includes('sony') || q.includes('walkman') || q.includes('cassette') || q.includes('camcorder')) {
+    return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80'; // Vintage Sony Walkman
+  }
+  if (q.includes('nintendo') || q.includes('game boy') || q.includes('gameboy') || q.includes('mario') || q.includes('pokemon')) {
+    return 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80'; // Nintendo Game Boy / Gaming
+  }
+  if (q.includes('gucci') || q.includes('hermes') || q.includes('hermès') || q.includes('designer') || q.includes('scarf')) {
+    return 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?auto=format&fit=crop&w=800&q=80'; // Luxury Designer Scarf
+  }
+  if (q.includes('vinyl') || q.includes('album') || q.includes('record')) {
+    return 'https://images.unsplash.com/photo-1539185441755-769473a23570?auto=format&fit=crop&w=800&q=80'; // Vinyl Record LP
+  }
+  if (q.includes('camera') || q.includes('lens') || q.includes('canon')) {
+    return 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80'; // Vintage Camera
+  }
+  if (q.includes('watch') || q.includes('rolex') || q.includes('seiko')) {
+    return 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=800&q=80'; // Luxury Watch
+  }
+  
+  return 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=800&q=80'; // Vintage Jacket Default
+}
+
+// Popular Resale Auto-Suggest Items Database
+export const POPULAR_AUTOFILL_ITEMS: AutofillSuggestion[] = [
+  { title: 'Pac-Man Fever Vinyl LP Album (1982)', category: 'Collectibles', brand: 'Columbia Records', estimatedPrice: 14, imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
+  { title: 'Air Jordan 1 High OG "Chicago Lost & Found"', category: 'Sneakers', brand: 'Nike / Jordan', estimatedPrice: 410, imageUrl: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
+  { title: 'Sony Walkman TPS-L2 Cassette Player', category: 'Electronics', brand: 'Sony', estimatedPrice: 340, imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
+  { title: 'Nintendo Game Boy Color Atomic Purple', category: 'Electronics', brand: 'Nintendo', estimatedPrice: 95, imageUrl: 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
+  { title: 'Hermès Silk Twill Scarf "Bride de Gala"', category: 'Designer & Luxury', brand: 'Hermès', estimatedPrice: 280, imageUrl: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?auto=format&fit=crop&w=800&q=80', platform: 'Poshmark' },
+  { title: 'Vintage 90s Champion Reverse Weave Hoodie', category: 'Vintage Clothing', brand: 'Champion', estimatedPrice: 85, imageUrl: 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=800&q=80', platform: 'Depop' },
+  { title: 'Pokémon Red Version Game Boy Cartridge', category: 'Collectibles', brand: 'Nintendo', estimatedPrice: 65, imageUrl: 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
+  { title: 'Super Mario Bros 3 NES Cartridge', category: 'Collectibles', brand: 'Nintendo', estimatedPrice: 22, imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
+];
+
 export async function fetchLiveComps({
   itemTitle,
   category = 'Vintage Clothing',
@@ -19,14 +63,15 @@ export async function fetchLiveComps({
   currentValue
 }: FetchCompsParams): Promise<CompsResponse> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const productImage = getRepresentativeProductImage(itemTitle);
 
   // Try using active Gemini AI models for realistic pricing if API key exists and currentValue is not manually set
   if (apiKey && (!currentValue || currentValue === 0)) {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const prompt = `
-You are a top resale market appraiser for eBay, Depop, and Poshmark.
-Estimate realistic recent sold prices for this item:
+You are a top resale market appraiser for PriceCharting, eBay, Depop, and Poshmark.
+Estimate realistic recent sold prices & PriceCharting tiers for this item:
 Item: "${itemTitle}"
 Brand: "${brand}"
 Category: "${category}"
@@ -34,10 +79,14 @@ Condition: "${condition}"
 
 Provide a strictly valid JSON response (no markdown backticks):
 {
-  "ebayPrice": Realistic average sold price on eBay in USD as number (e.g. 15 for Pacman Fever vinyl album, 180 for Jordans),
+  "ebayPrice": Realistic average sold price on eBay in USD as number (e.g. 14 for Pacman Fever vinyl album, 410 for Lost & Found Jordans),
   "depopPrice": Realistic sold price on Depop in USD as number,
   "poshmarkPrice": Realistic sold price on Poshmark in USD as number,
   "vintedPrice": Realistic sold price on Vinted in USD as number,
+  "loosePrice": PriceCharting Loose/Ungraded average price in USD as number,
+  "cibPrice": PriceCharting Complete-In-Box (CIB) average price in USD as number,
+  "newPrice": PriceCharting Brand New / Factory Sealed price in USD as number,
+  "gradedPrice": PriceCharting Graded (PSA/Wata) price in USD as number,
   "bestPlatform": "Select best from ['eBay', 'Depop', 'Poshmark', 'Vinted']",
   "demand": "Select one from ['High', 'Medium', 'Low']"
 }
@@ -56,6 +105,11 @@ Provide a strictly valid JSON response (no markdown backticks):
           const poshmarkVal = Number(parsed.poshmarkPrice) || Math.round(ebayVal * 1.05);
           const vintedVal = Number(parsed.vintedPrice) || Math.round(ebayVal * 0.85);
 
+          const loosePrice = Number(parsed.loosePrice) || Math.round(ebayVal * 0.85);
+          const cibPrice = Number(parsed.cibPrice) || Math.round(ebayVal * 1.25);
+          const newPrice = Number(parsed.newPrice) || Math.round(ebayVal * 2.10);
+          const gradedPrice = Number(parsed.gradedPrice) || Math.round(ebayVal * 3.80);
+
           const bestPlatform = (parsed.bestPlatform as ResalePlatform) || 'eBay';
           const bestVal = Math.max(ebayVal, depopVal, poshmarkVal);
 
@@ -63,10 +117,17 @@ Provide a strictly valid JSON response (no markdown backticks):
           return {
             itemTitle,
             brand: brand || 'Generic',
+            productImageUrl: productImage,
             overallBestValue: bestVal,
             overallBestPlatform: bestPlatform,
             marketDemand: parsed.demand || (bestVal > 100 ? 'High' : bestVal > 30 ? 'Medium' : 'Low'),
             resaleVelocityDays: bestVal < 20 ? 5 : bestVal > 150 ? 8 : 12,
+            priceChartingTiers: {
+              loosePrice,
+              cibPrice,
+              newPrice,
+              gradedPrice
+            },
             platforms: [
               {
                 platform: 'eBay',
@@ -119,16 +180,13 @@ Provide a strictly valid JSON response (no markdown backticks):
     }
   }
 
-  // -----------------------------------------------------------------
-  // SMART MARKET DATABASE & KEYWORD PRICING MATRIX (FALLBACK)
-  // -----------------------------------------------------------------
+  // Fallback Pricing Matrix with PriceCharting Tiers
   let basePrice = currentValue && currentValue > 0 ? currentValue : 20;
 
   if (!currentValue || currentValue === 0) {
     const titleLower = itemTitle.toLowerCase();
     const catLower = category.toLowerCase();
 
-    // 1. Vinyl Records, Albums, Cassettes, CDs, VHS, Cheap Novelties
     if (
       titleLower.includes('pacman') ||
       titleLower.includes('pac-man') ||
@@ -142,14 +200,10 @@ Provide a strictly valid JSON response (no markdown backticks):
       titleLower.includes('novelty') ||
       titleLower.includes('plush') ||
       titleLower.includes('book') ||
-      titleLower.includes('magazine') ||
-      titleLower.includes('mug') ||
       catLower.includes('collectible')
     ) {
-      basePrice = 12; // E.g., Pac-Man Fever vinyl LP sells for ~$10 - $14
-    }
-    // 2. High-end Sneakers (Jordan, Kobe, Yeezy, Travis)
-    else if (
+      basePrice = 14;
+    } else if (
       titleLower.includes('jordan') ||
       titleLower.includes('yeezy') ||
       titleLower.includes('dunk') ||
@@ -157,130 +211,93 @@ Provide a strictly valid JSON response (no markdown backticks):
       catLower.includes('sneaker')
     ) {
       basePrice = 180;
-    }
-    // 3. High Luxury Designer (Gucci, Hermes, Chanel, Louis Vuitton)
-    else if (
+    } else if (
       titleLower.includes('gucci') ||
       titleLower.includes('hermes') ||
       titleLower.includes('hermès') ||
-      titleLower.includes('chanel') ||
-      titleLower.includes('louis vuitton') ||
+      titleLower.includes('designer') ||
       catLower.includes('luxury')
     ) {
       basePrice = 320;
-    }
-    // 4. Vintage Electronics (Sony Walkman, Nintendo Game Boy, Camcorders)
-    else if (
+    } else if (
       titleLower.includes('walkman') ||
       titleLower.includes('game boy') ||
-      titleLower.includes('gameboy') ||
       titleLower.includes('nintendo') ||
       titleLower.includes('sony') ||
-      titleLower.includes('camcorder') ||
       catLower.includes('electronics')
     ) {
       basePrice = 95;
-    }
-    // 5. Vintage Clothing (Jackets, Hoodies, Tees)
-    else if (
-      titleLower.includes('vintage') ||
-      titleLower.includes('jacket') ||
-      titleLower.includes('hoodie') ||
-      titleLower.includes('sweatshirt') ||
-      titleLower.includes('tee') ||
-      catLower.includes('vintage')
-    ) {
-      basePrice = 45;
-    }
-    // 6. Generic items default
-    else {
+    } else {
       basePrice = 25;
     }
   }
 
-  // Adjust for condition
   let conditionMultiplier = 1.0;
   if (condition === 'New with Tags') conditionMultiplier = 1.30;
   else if (condition === 'Like New') conditionMultiplier = 1.15;
   else if (condition === 'Fair') conditionMultiplier = 0.75;
-  else if (condition === 'Poor') conditionMultiplier = 0.50;
 
   const adjustedPrice = Math.round(basePrice * conditionMultiplier);
 
-  // Platform specific breakdown
-  const isVintage = category.toLowerCase().includes('vintage') || itemTitle.toLowerCase().includes('vintage');
-  const isLuxury = category.toLowerCase().includes('luxury') || category.toLowerCase().includes('designer');
-
-  const ebayPrice = Math.round(adjustedPrice * 1.0);
-  const depopPrice = Math.round(adjustedPrice * (isVintage ? 1.15 : 0.90));
-  const poshmarkPrice = Math.round(adjustedPrice * (isLuxury ? 1.20 : 0.95));
-  const vintedPrice = Math.round(adjustedPrice * 0.85);
-
-  let bestPlatform: ResalePlatform = 'eBay';
-  let maxPrice = ebayPrice;
-
-  if (depopPrice > maxPrice && isVintage) {
-    bestPlatform = 'Depop';
-    maxPrice = depopPrice;
-  }
-  if (poshmarkPrice > maxPrice && isLuxury) {
-    bestPlatform = 'Poshmark';
-    maxPrice = poshmarkPrice;
-  }
+  const priceChartingTiers: PriceChartingTiers = {
+    loosePrice: Math.round(adjustedPrice * 0.85),
+    cibPrice: Math.round(adjustedPrice * 1.30),
+    newPrice: Math.round(adjustedPrice * 2.20),
+    gradedPrice: Math.round(adjustedPrice * 4.10)
+  };
 
   const now = new Date();
-  const historicalPrices = [
-    { date: new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(maxPrice * 0.88) },
-    { date: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(maxPrice * 0.92) },
-    { date: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(maxPrice * 0.96) },
-    { date: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: maxPrice }
-  ];
-
   return {
     itemTitle,
     brand: brand || 'Generic',
-    overallBestValue: maxPrice,
-    overallBestPlatform: bestPlatform,
-    marketDemand: maxPrice > 100 ? 'High' : maxPrice > 30 ? 'Medium' : 'Low',
-    resaleVelocityDays: maxPrice < 20 ? 4 : maxPrice > 150 ? 8 : 12,
+    productImageUrl: productImage,
+    overallBestValue: adjustedPrice,
+    overallBestPlatform: 'eBay',
+    marketDemand: adjustedPrice > 100 ? 'High' : adjustedPrice > 30 ? 'Medium' : 'Low',
+    resaleVelocityDays: adjustedPrice < 20 ? 4 : 10,
+    priceChartingTiers,
     platforms: [
       {
         platform: 'eBay',
-        estimatedPrice: ebayPrice,
+        estimatedPrice: adjustedPrice,
         activeListingsCount: 18,
         soldRecentlyCount: 42,
         matchConfidence: 96,
-        recommendedPriceRange: { min: Math.max(5, Math.round(ebayPrice * 0.80)), max: Math.round(ebayPrice * 1.25) },
+        recommendedPriceRange: { min: Math.max(5, Math.round(adjustedPrice * 0.80)), max: Math.round(adjustedPrice * 1.25) },
         sampleTitle: `${itemTitle} - Verified Sold Listing`
       },
       {
         platform: 'Depop',
-        estimatedPrice: depopPrice,
+        estimatedPrice: Math.round(adjustedPrice * 0.95),
         activeListingsCount: 9,
         soldRecentlyCount: 21,
-        matchConfidence: isVintage ? 98 : 82,
-        recommendedPriceRange: { min: Math.max(5, Math.round(depopPrice * 0.80)), max: Math.round(depopPrice * 1.25) },
+        matchConfidence: 88,
+        recommendedPriceRange: { min: Math.max(5, Math.round(adjustedPrice * 0.80)), max: Math.round(adjustedPrice * 1.25) },
         sampleTitle: `VINTAGE ${itemTitle.toUpperCase()}`
       },
       {
         platform: 'Poshmark',
-        estimatedPrice: poshmarkPrice,
+        estimatedPrice: Math.round(adjustedPrice * 1.05),
         activeListingsCount: 14,
         soldRecentlyCount: 28,
-        matchConfidence: isLuxury ? 96 : 85,
-        recommendedPriceRange: { min: Math.max(5, Math.round(poshmarkPrice * 0.80)), max: Math.round(poshmarkPrice * 1.25) },
+        matchConfidence: 90,
+        recommendedPriceRange: { min: Math.max(5, Math.round(adjustedPrice * 0.80)), max: Math.round(adjustedPrice * 1.25) },
         sampleTitle: `Authentic ${itemTitle}`
       },
       {
         platform: 'Vinted',
-        estimatedPrice: vintedPrice,
+        estimatedPrice: Math.round(adjustedPrice * 0.85),
         activeListingsCount: 7,
         soldRecentlyCount: 15,
         matchConfidence: 80,
-        recommendedPriceRange: { min: Math.max(5, Math.round(vintedPrice * 0.80)), max: Math.round(vintedPrice * 1.25) },
+        recommendedPriceRange: { min: Math.max(5, Math.round(adjustedPrice * 0.80)), max: Math.round(adjustedPrice * 1.25) },
         sampleTitle: `${itemTitle} - Great Deal`
       }
     ],
-    historicalPrices
+    historicalPrices: [
+      { date: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(adjustedPrice * 0.88) },
+      { date: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(adjustedPrice * 0.94) },
+      { date: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: adjustedPrice }
+    ]
   };
 }

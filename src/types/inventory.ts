@@ -47,14 +47,23 @@ export interface CompPlatformDetails {
   sampleTitle: string;
 }
 
+export interface PriceChartingTiers {
+  loosePrice: number;
+  cibPrice: number;
+  newPrice: number;
+  gradedPrice: number;
+}
+
 export interface CompsResponse {
   itemId?: string;
   itemTitle: string;
   brand?: string;
+  productImageUrl?: string;
   overallBestValue: number;
   overallBestPlatform: ResalePlatform;
   platforms: CompPlatformDetails[];
   historicalPrices: { date: string; value: number }[];
+  priceChartingTiers: PriceChartingTiers;
   marketDemand: 'High' | 'Medium' | 'Low';
   resaleVelocityDays: number;
 }
@@ -71,4 +80,13 @@ export interface AutoTagResult {
   searchKeywords: string[];
   description: string;
   tags: string[];
+}
+
+export interface AutofillSuggestion {
+  title: string;
+  category: string;
+  brand: string;
+  estimatedPrice: number;
+  imageUrl: string;
+  platform: ResalePlatform;
 }

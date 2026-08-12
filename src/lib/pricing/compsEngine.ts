@@ -11,36 +11,64 @@ interface FetchCompsParams {
 
 const PREFERRED_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
 
-// High quality curated product imagery lookup based on query keywords
-export function getRepresentativeProductImage(query: string): string {
+// Real-time product image resolver (Curated Registry + Wikipedia Live Image API)
+export async function fetchProductImage(query: string): Promise<string> {
   const q = query.toLowerCase();
 
-  if (q.includes('pacman') || q.includes('pac-man') || q.includes('fever')) {
-    return 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80'; // Retro Pac-Man Arcade / Record
+  // 1. Lego & Toy Products
+  if (q.includes('lego')) {
+    if (q.includes('batman') || q.includes('batmobile')) {
+      return 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?auto=format&fit=crop&w=800&q=80'; // LEGO Batman Set
+    }
+    if (q.includes('delorean') || q.includes('back to the future') || q.includes('10300')) {
+      return 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=800&q=80'; // LEGO DeLorean / Vehicles
+    }
+    return 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=800&q=80'; // LEGO Bricks & Sets
   }
+
+  // 2. Air Jordans & Sneakers
   if (q.includes('jordan') || q.includes('sneaker') || q.includes('nike') || q.includes('yeezy') || q.includes('dunk')) {
-    return 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80'; // Air Jordan Sneakers
+    return 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80';
   }
+
+  // 3. Vintage Audio & Electronics
   if (q.includes('sony') || q.includes('walkman') || q.includes('cassette') || q.includes('camcorder')) {
-    return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80'; // Vintage Sony Walkman
+    return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80';
   }
+
+  // 4. Retro Gaming & Consoles
   if (q.includes('nintendo') || q.includes('game boy') || q.includes('gameboy') || q.includes('mario') || q.includes('pokemon')) {
-    return 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80'; // Nintendo Game Boy / Gaming
+    return 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80';
   }
-  if (q.includes('gucci') || q.includes('hermes') || q.includes('hermès') || q.includes('designer') || q.includes('scarf')) {
-    return 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?auto=format&fit=crop&w=800&q=80'; // Luxury Designer Scarf
+
+  // 5. Retro Collectibles & Vinyl Records
+  if (q.includes('pacman') || q.includes('pac-man') || q.includes('fever') || q.includes('arcade')) {
+    return 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80';
   }
   if (q.includes('vinyl') || q.includes('album') || q.includes('record')) {
-    return 'https://images.unsplash.com/photo-1539185441755-769473a23570?auto=format&fit=crop&w=800&q=80'; // Vinyl Record LP
+    return 'https://images.unsplash.com/photo-1539185441755-769473a23570?auto=format&fit=crop&w=800&q=80';
   }
-  if (q.includes('camera') || q.includes('lens') || q.includes('canon')) {
-    return 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80'; // Vintage Camera
+
+  // 6. Luxury Designer Accessories
+  if (q.includes('gucci') || q.includes('hermes') || q.includes('hermès') || q.includes('designer') || q.includes('scarf')) {
+    return 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?auto=format&fit=crop&w=800&q=80';
   }
-  if (q.includes('watch') || q.includes('rolex') || q.includes('seiko')) {
-    return 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=800&q=80'; // Luxury Watch
+
+  // 7. Live Wikipedia Media API image search fallback
+  try {
+    const res = await fetch(`https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=1&prop=pageimages&pithumbsize=800&format=json`);
+    const data = await res.json();
+    if (data.query && data.query.pages) {
+      const page = Object.values(data.query.pages)[0] as { thumbnail?: { source?: string } };
+      if (page && page.thumbnail && page.thumbnail.source) {
+        return page.thumbnail.source;
+      }
+    }
+  } catch (err) {
+    console.warn('Wikipedia image fetch error:', err);
   }
-  
-  return 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=800&q=80'; // Vintage Jacket Default
+
+  return 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=800&q=80';
 }
 
 export async function fetchLiveComps({
@@ -51,7 +79,20 @@ export async function fetchLiveComps({
   currentValue
 }: FetchCompsParams): Promise<CompsResponse> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  const productImage = getRepresentativeProductImage(itemTitle);
+  const productImage = await fetchProductImage(itemTitle);
+
+  // Auto-detect brand if missing
+  let detectedBrand = brand;
+  if (!detectedBrand || detectedBrand === 'Generic') {
+    const t = itemTitle.toLowerCase();
+    if (t.includes('lego')) detectedBrand = 'LEGO';
+    else if (t.includes('jordan') || t.includes('nike')) detectedBrand = 'Nike / Jordan';
+    else if (t.includes('sony')) detectedBrand = 'Sony';
+    else if (t.includes('nintendo')) detectedBrand = 'Nintendo';
+    else if (t.includes('gucci')) detectedBrand = 'Gucci';
+    else if (t.includes('hermes') || t.includes('hermès')) detectedBrand = 'Hermès';
+    else detectedBrand = 'Authentic Product';
+  }
 
   // Try using active Gemini AI models for realistic pricing if API key exists and currentValue is not manually set
   if (apiKey && (!currentValue || currentValue === 0)) {
@@ -61,13 +102,13 @@ export async function fetchLiveComps({
 You are a top resale market appraiser for PriceCharting, eBay, Depop, and Poshmark.
 Estimate realistic recent sold prices & PriceCharting tiers for this item:
 Item: "${itemTitle}"
-Brand: "${brand}"
+Brand: "${detectedBrand}"
 Category: "${category}"
 Condition: "${condition}"
 
 Provide a strictly valid JSON response (no markdown backticks):
 {
-  "ebayPrice": Realistic average sold price on eBay in USD as number (e.g. 14 for Pacman Fever vinyl album, 410 for Lost & Found Jordans),
+  "ebayPrice": Realistic average sold price on eBay in USD as number (e.g. 170 for LEGO DeLorean 10300, 14 for Pacman Fever vinyl album, 410 for Lost & Found Jordans),
   "depopPrice": Realistic sold price on Depop in USD as number,
   "poshmarkPrice": Realistic sold price on Poshmark in USD as number,
   "vintedPrice": Realistic sold price on Vinted in USD as number,
@@ -104,7 +145,7 @@ Provide a strictly valid JSON response (no markdown backticks):
           const now = new Date();
           return {
             itemTitle,
-            brand: brand || 'Generic',
+            brand: detectedBrand,
             productImageUrl: productImage,
             overallBestValue: bestVal,
             overallBestPlatform: bestPlatform,
@@ -175,19 +216,13 @@ Provide a strictly valid JSON response (no markdown backticks):
     const titleLower = itemTitle.toLowerCase();
     const catLower = category.toLowerCase();
 
-    if (
+    if (titleLower.includes('lego')) {
+      basePrice = titleLower.includes('delorean') || titleLower.includes('10300') ? 170 : 85;
+    } else if (
       titleLower.includes('pacman') ||
       titleLower.includes('pac-man') ||
       titleLower.includes('fever') ||
       titleLower.includes('vinyl') ||
-      titleLower.includes('album') ||
-      titleLower.includes('cassette') ||
-      titleLower.includes('vhs') ||
-      titleLower.includes('dvd') ||
-      titleLower.includes('cd') ||
-      titleLower.includes('novelty') ||
-      titleLower.includes('plush') ||
-      titleLower.includes('book') ||
       catLower.includes('collectible')
     ) {
       basePrice = 14;
@@ -195,23 +230,18 @@ Provide a strictly valid JSON response (no markdown backticks):
       titleLower.includes('jordan') ||
       titleLower.includes('yeezy') ||
       titleLower.includes('dunk') ||
-      titleLower.includes('kobe') ||
       catLower.includes('sneaker')
     ) {
       basePrice = 180;
     } else if (
       titleLower.includes('gucci') ||
       titleLower.includes('hermes') ||
-      titleLower.includes('hermès') ||
-      titleLower.includes('designer') ||
       catLower.includes('luxury')
     ) {
       basePrice = 320;
     } else if (
       titleLower.includes('walkman') ||
       titleLower.includes('game boy') ||
-      titleLower.includes('nintendo') ||
-      titleLower.includes('sony') ||
       catLower.includes('electronics')
     ) {
       basePrice = 95;
@@ -237,7 +267,7 @@ Provide a strictly valid JSON response (no markdown backticks):
   const now = new Date();
   return {
     itemTitle,
-    brand: brand || 'Generic',
+    brand: detectedBrand,
     productImageUrl: productImage,
     overallBestValue: adjustedPrice,
     overallBestPlatform: 'eBay',

@@ -11,19 +11,38 @@ interface FetchCompsParams {
 
 const PREFERRED_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
 
-// Real-time product image resolver (Curated Registry + Wikipedia Live Image API)
+// Real-time product image resolver (Exact LEGO Set Brickset CDN + Wikipedia API + Curated Registry)
 export async function fetchProductImage(query: string): Promise<string> {
   const q = query.toLowerCase();
 
-  // 1. Lego & Toy Products
-  if (q.includes('lego')) {
+  // 1. EXACT OFFICIAL LEGO SET IMAGE ENGINE (Brickset Official Product CDN)
+  if (q.includes('lego') || /\b(\d{4,5})\b/.test(q)) {
+    // Extract set number (e.g. 10300, 76139, 75192, 71043, 76178, 42056, 21309)
+    const match = q.match(/\b(\d{4,5})\b/);
+    if (match) {
+      const setNum = match[1];
+      return `https://images.brickset.com/sets/images/${setNum}-1.jpg`;
+    }
+
+    // Direct Lego set keyword matches if set number wasn't explicitly typed
+    if (q.includes('delorean') || q.includes('back to the future') || q.includes('time machine')) {
+      return 'https://images.brickset.com/sets/images/10300-1.jpg'; // LEGO Back to the Future DeLorean 10300
+    }
     if (q.includes('batman') || q.includes('batmobile')) {
-      return 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?auto=format&fit=crop&w=800&q=80'; // LEGO Batman Set
+      return 'https://images.brickset.com/sets/images/76139-1.jpg'; // LEGO Batman Batmobile 76139
     }
-    if (q.includes('delorean') || q.includes('back to the future') || q.includes('10300')) {
-      return 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=800&q=80'; // LEGO DeLorean / Vehicles
+    if (q.includes('falcon') || q.includes('star wars')) {
+      return 'https://images.brickset.com/sets/images/75192-1.jpg'; // LEGO Millennium Falcon 75192
     }
-    return 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=800&q=80'; // LEGO Bricks & Sets
+    if (q.includes('hogwarts') || q.includes('harry potter')) {
+      return 'https://images.brickset.com/sets/images/71043-1.jpg'; // LEGO Hogwarts Castle 71043
+    }
+    if (q.includes('bugle') || q.includes('marvel') || q.includes('spiderman')) {
+      return 'https://images.brickset.com/sets/images/76178-1.jpg'; // LEGO Daily Bugle 76178
+    }
+
+    // Generic LEGO set default (LEGO DeLorean 10300)
+    return 'https://images.brickset.com/sets/images/10300-1.jpg';
   }
 
   // 2. Air Jordans & Sneakers
@@ -38,7 +57,7 @@ export async function fetchProductImage(query: string): Promise<string> {
 
   // 4. Retro Gaming & Consoles
   if (q.includes('nintendo') || q.includes('game boy') || q.includes('gameboy') || q.includes('mario') || q.includes('pokemon')) {
-    return 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80';
+    return 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80';
   }
 
   // 5. Retro Collectibles & Vinyl Records
@@ -68,7 +87,7 @@ export async function fetchProductImage(query: string): Promise<string> {
     console.warn('Wikipedia image fetch error:', err);
   }
 
-  return 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=800&q=80';
+  return 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=800&q=80';
 }
 
 export async function fetchLiveComps({

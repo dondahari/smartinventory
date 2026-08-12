@@ -1,17 +1,16 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AutoTagResult, ItemCondition, ResalePlatform } from '@/types/inventory';
 
+const PREFERRED_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
+
 export async function analyzeItemPhoto(base64Image: string, mimeType: string = 'image/jpeg'): Promise<AutoTagResult> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
   if (apiKey) {
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
 
-      const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
-
-      const prompt = `
+    const prompt = `
 You are an expert resale app appraiser specializing in eBay, Depop, and Poshmark.
 Analyze this item photo and extract reselling parameters as JSON.
 Provide a strictly valid JSON response (no markdown backticks, no markdown codeblocks) matching this schema:
@@ -30,35 +29,39 @@ Provide a strictly valid JSON response (no markdown backticks, no markdown codeb
 }
 `;
 
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            data: cleanBase64,
-            mimeType: mimeType || 'image/jpeg'
+    for (const modelName of PREFERRED_MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: mimeType || 'image/jpeg'
+            }
           }
-        }
-      ]);
+        ]);
 
-      const responseText = result.response.text();
-      const cleanedJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanedJson);
+        const responseText = result.response.text();
+        const cleanedJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanedJson);
 
-      return {
-        title: parsed.title || 'Resale Item',
-        brand: parsed.brand || 'Unbranded',
-        category: parsed.category || 'Vintage Clothing',
-        condition: (parsed.condition as ItemCondition) || 'Good',
-        estimatedValue: Number(parsed.estimatedValue) || 45,
-        purchasePriceEstimate: Number(parsed.purchasePriceEstimate) || 10,
-        suggestedStorageLocation: parsed.suggestedStorageLocation || 'Bin A',
-        suggestedPlatform: (parsed.suggestedPlatform as ResalePlatform) || 'eBay',
-        searchKeywords: Array.isArray(parsed.searchKeywords) ? parsed.searchKeywords : ['resale', 'item'],
-        description: parsed.description || 'Uploaded resale inventory item.',
-        tags: Array.isArray(parsed.tags) ? parsed.tags : ['inventory', 'resale']
-      };
-    } catch (error) {
-      console.warn('Gemini API call failed or rate limited, falling back to smart AI vision engine:', error);
+        return {
+          title: parsed.title || 'Resale Item',
+          brand: parsed.brand || 'Unbranded',
+          category: parsed.category || 'Vintage Clothing',
+          condition: (parsed.condition as ItemCondition) || 'Good',
+          estimatedValue: Number(parsed.estimatedValue) || 45,
+          purchasePriceEstimate: Number(parsed.purchasePriceEstimate) || 10,
+          suggestedStorageLocation: parsed.suggestedStorageLocation || 'Bin A',
+          suggestedPlatform: (parsed.suggestedPlatform as ResalePlatform) || 'eBay',
+          searchKeywords: Array.isArray(parsed.searchKeywords) ? parsed.searchKeywords : ['resale', 'item'],
+          description: parsed.description || 'Uploaded resale inventory item.',
+          tags: Array.isArray(parsed.tags) ? parsed.tags : ['inventory', 'resale']
+        };
+      } catch (err) {
+        console.warn(`Gemini model ${modelName} call failed, trying next:`, err);
+      }
     }
   }
 

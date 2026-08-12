@@ -9,6 +9,8 @@ interface FetchCompsParams {
   currentValue?: number;
 }
 
+const PREFERRED_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
+
 export async function fetchLiveComps({
   itemTitle,
   category = 'Vintage Clothing',
@@ -18,13 +20,11 @@ export async function fetchLiveComps({
 }: FetchCompsParams): Promise<CompsResponse> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-  // Try using Gemini AI for realistic pricing if API key exists and currentValue is not manually set
+  // Try using active Gemini AI models for realistic pricing if API key exists and currentValue is not manually set
   if (apiKey && (!currentValue || currentValue === 0)) {
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const genAI = new GoogleGenerativeAI(apiKey);
 
-      const prompt = `
+    const prompt = `
 You are a top resale market appraiser for eBay, Depop, and Poshmark.
 Estimate realistic recent sold prices for this item:
 Item: "${itemTitle}"
@@ -34,7 +34,7 @@ Condition: "${condition}"
 
 Provide a strictly valid JSON response (no markdown backticks):
 {
-  "ebayPrice": Realistic average sold price on eBay in USD as number (e.g. 10 for Pacman Fever vinyl album, 180 for Jordans),
+  "ebayPrice": Realistic average sold price on eBay in USD as number (e.g. 15 for Pacman Fever vinyl album, 180 for Jordans),
   "depopPrice": Realistic sold price on Depop in USD as number,
   "poshmarkPrice": Realistic sold price on Poshmark in USD as number,
   "vintedPrice": Realistic sold price on Vinted in USD as number,
@@ -43,81 +43,84 @@ Provide a strictly valid JSON response (no markdown backticks):
 }
 `;
 
-      const aiRes = await model.generateContent(prompt);
-      const text = aiRes.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(text);
+    for (const modelName of PREFERRED_MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const aiRes = await model.generateContent(prompt);
+        const text = aiRes.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(text);
 
-      if (parsed.ebayPrice && Number(parsed.ebayPrice) > 0) {
-        const ebayVal = Number(parsed.ebayPrice);
-        const depopVal = Number(parsed.depopPrice) || Math.round(ebayVal * 0.95);
-        const poshmarkVal = Number(parsed.poshmarkPrice) || Math.round(ebayVal * 1.05);
-        const vintedVal = Number(parsed.vintedPrice) || Math.round(ebayVal * 0.85);
+        if (parsed.ebayPrice && Number(parsed.ebayPrice) > 0) {
+          const ebayVal = Number(parsed.ebayPrice);
+          const depopVal = Number(parsed.depopPrice) || Math.round(ebayVal * 0.95);
+          const poshmarkVal = Number(parsed.poshmarkPrice) || Math.round(ebayVal * 1.05);
+          const vintedVal = Number(parsed.vintedPrice) || Math.round(ebayVal * 0.85);
 
-        const bestPlatform = (parsed.bestPlatform as ResalePlatform) || 'eBay';
-        const bestVal = Math.max(ebayVal, depopVal, poshmarkVal);
+          const bestPlatform = (parsed.bestPlatform as ResalePlatform) || 'eBay';
+          const bestVal = Math.max(ebayVal, depopVal, poshmarkVal);
 
-        const now = new Date();
-        return {
-          itemTitle,
-          brand: brand || 'Generic',
-          overallBestValue: bestVal,
-          overallBestPlatform: bestPlatform,
-          marketDemand: parsed.demand || (bestVal > 100 ? 'High' : bestVal > 30 ? 'Medium' : 'Low'),
-          resaleVelocityDays: bestVal < 20 ? 5 : bestVal > 150 ? 8 : 12,
-          platforms: [
-            {
-              platform: 'eBay',
-              estimatedPrice: ebayVal,
-              activeListingsCount: 14,
-              soldRecentlyCount: 32,
-              matchConfidence: 96,
-              recommendedPriceRange: { min: Math.round(ebayVal * 0.80), max: Math.round(ebayVal * 1.20) },
-              sampleTitle: `${itemTitle} - Recent Sold Listing`
-            },
-            {
-              platform: 'Depop',
-              estimatedPrice: depopVal,
-              activeListingsCount: 8,
-              soldRecentlyCount: 19,
-              matchConfidence: 88,
-              recommendedPriceRange: { min: Math.round(depopVal * 0.80), max: Math.round(depopVal * 1.20) },
-              sampleTitle: `VINTAGE ${itemTitle.toUpperCase()}`
-            },
-            {
-              platform: 'Poshmark',
-              estimatedPrice: poshmarkVal,
-              activeListingsCount: 12,
-              soldRecentlyCount: 25,
-              matchConfidence: 90,
-              recommendedPriceRange: { min: Math.round(poshmarkVal * 0.80), max: Math.round(poshmarkVal * 1.20) },
-              sampleTitle: `Authentic ${itemTitle}`
-            },
-            {
-              platform: 'Vinted',
-              estimatedPrice: vintedVal,
-              activeListingsCount: 6,
-              soldRecentlyCount: 11,
-              matchConfidence: 82,
-              recommendedPriceRange: { min: Math.round(vintedVal * 0.80), max: Math.round(vintedVal * 1.20) },
-              sampleTitle: `${itemTitle} - Great Condition`
-            }
-          ],
-          historicalPrices: [
-            { date: new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(bestVal * 0.85) },
-            { date: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(bestVal * 0.90) },
-            { date: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(bestVal * 0.95) },
-            { date: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: bestVal }
-          ]
-        };
+          const now = new Date();
+          return {
+            itemTitle,
+            brand: brand || 'Generic',
+            overallBestValue: bestVal,
+            overallBestPlatform: bestPlatform,
+            marketDemand: parsed.demand || (bestVal > 100 ? 'High' : bestVal > 30 ? 'Medium' : 'Low'),
+            resaleVelocityDays: bestVal < 20 ? 5 : bestVal > 150 ? 8 : 12,
+            platforms: [
+              {
+                platform: 'eBay',
+                estimatedPrice: ebayVal,
+                activeListingsCount: 14,
+                soldRecentlyCount: 32,
+                matchConfidence: 96,
+                recommendedPriceRange: { min: Math.round(ebayVal * 0.80), max: Math.round(ebayVal * 1.20) },
+                sampleTitle: `${itemTitle} - Recent Sold Listing`
+              },
+              {
+                platform: 'Depop',
+                estimatedPrice: depopVal,
+                activeListingsCount: 8,
+                soldRecentlyCount: 19,
+                matchConfidence: 88,
+                recommendedPriceRange: { min: Math.round(depopVal * 0.80), max: Math.round(depopVal * 1.20) },
+                sampleTitle: `VINTAGE ${itemTitle.toUpperCase()}`
+              },
+              {
+                platform: 'Poshmark',
+                estimatedPrice: poshmarkVal,
+                activeListingsCount: 12,
+                soldRecentlyCount: 25,
+                matchConfidence: 90,
+                recommendedPriceRange: { min: Math.round(poshmarkVal * 0.80), max: Math.round(poshmarkVal * 1.20) },
+                sampleTitle: `Authentic ${itemTitle}`
+              },
+              {
+                platform: 'Vinted',
+                estimatedPrice: vintedVal,
+                activeListingsCount: 6,
+                soldRecentlyCount: 11,
+                matchConfidence: 82,
+                recommendedPriceRange: { min: Math.round(vintedVal * 0.80), max: Math.round(vintedVal * 1.20) },
+                sampleTitle: `${itemTitle} - Great Condition`
+              }
+            ],
+            historicalPrices: [
+              { date: new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(bestVal * 0.85) },
+              { date: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(bestVal * 0.90) },
+              { date: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: Math.round(bestVal * 0.95) },
+              { date: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: bestVal }
+            ]
+          };
+        }
+      } catch (err) {
+        console.warn(`Gemini model ${modelName} error, trying next:`, err);
       }
-    } catch (err) {
-      console.warn('Gemini Comps AI error, falling back to smart market database:', err);
     }
   }
 
   // -----------------------------------------------------------------
-  // SMART MARKET DATABASE & KEYWORD PRICING MATRIX
-  // Calculates accurate realistic prices for thousands of common items
+  // SMART MARKET DATABASE & KEYWORD PRICING MATRIX (FALLBACK)
   // -----------------------------------------------------------------
   let basePrice = currentValue && currentValue > 0 ? currentValue : 20;
 

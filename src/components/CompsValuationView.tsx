@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search, TrendingUp, RefreshCw, Sparkles, ExternalLink, Layers, ShieldCheck } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, TrendingUp, RefreshCw, Sparkles, ExternalLink, Layers, ShieldCheck, ChevronRight } from 'lucide-react';
 import { CompsResponse } from '@/types/inventory';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
@@ -12,10 +12,57 @@ export const CompsValuationView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CompsResponse | null>(null);
 
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch real-time autocomplete suggestions as user types
+  useEffect(() => {
+    if (!query.trim() || query.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/comps/autocomplete?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (data.suggestions && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
+          setShowSuggestions(true);
+          setSelectedIndex(-1);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch (err) {
+        console.error('Autocomplete fetch error:', err);
+      }
+    }, 120);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const executeSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) return;
 
     setLoading(true);
+    setShowSuggestions(false);
     try {
       const res = await fetch('/api/comps/fetch', {
         method: 'POST',
@@ -42,6 +89,30 @@ export const CompsValuationView: React.FC = () => {
     executeSearch(query);
   };
 
+  const handleSelectSuggestion = (selectedText: string) => {
+    setQuery(selectedText);
+    setShowSuggestions(false);
+    executeSearch(selectedText);
+  };
+
+  // Keyboard navigation for suggestions
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      handleSelectSuggestion(suggestions[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -55,20 +126,22 @@ export const CompsValuationView: React.FC = () => {
 
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Search Live Comps & PriceCharting Tiers</h2>
           <p className="text-xs text-indigo-200">
-            Compare loose, CIB, sealed, and graded values across eBay, Depop, and Poshmark before buying or listing.
+            Type any item (e.g., Lego, Lego Batman, Air Jordan) to trigger real-time search completions.
           </p>
 
-          {/* Clean Search Form */}
+          {/* Search Form with Dynamic Autocomplete */}
           <form onSubmit={handleFormSubmit} className="space-y-3 pt-2">
-            <div className="relative text-left">
+            <div className="relative text-left" ref={containerRef}>
               
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Type item, brand, or model (e.g. Pacman Fever, Air Jordan 1, Game Boy)..."
+                  placeholder="Type item, brand, or model (e.g. lego, lego ba, jordan, pokemon)..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => query.trim().length >= 2 && setShowSuggestions(true)}
                   className="w-full pl-12 pr-32 py-3.5 bg-white text-slate-900 placeholder-slate-400 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-emerald-500/30 shadow-md"
                 />
                 <button
@@ -80,6 +153,32 @@ export const CompsValuationView: React.FC = () => {
                   <span>Fetch Comps</span>
                 </button>
               </div>
+
+              {/* Dynamic Live Autocomplete Suggestions Menu */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 text-slate-900">
+                  <div className="px-3.5 py-2 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex justify-between items-center">
+                    <span>Live Search Autocomplete</span>
+                    <span>Use ↑↓ keys or click</span>
+                  </div>
+                  {suggestions.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleSelectSuggestion(item)}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      className={`p-3.5 flex items-center justify-between transition-colors cursor-pointer text-xs font-semibold ${
+                        selectedIndex === idx ? 'bg-emerald-50 text-emerald-900 font-bold' : 'hover:bg-slate-50 text-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{item}</span>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                  ))}
+                </div>
+              )}
 
             </div>
 

@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, TrendingUp, RefreshCw, Sparkles, ExternalLink, Layers, ShieldCheck } from 'lucide-react';
-import { CompsResponse, AutofillSuggestion } from '@/types/inventory';
-import { POPULAR_AUTOFILL_ITEMS } from '@/lib/pricing/compsEngine';
+import { CompsResponse } from '@/types/inventory';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export const CompsValuationView: React.FC = () => {
@@ -12,36 +11,11 @@ export const CompsValuationView: React.FC = () => {
   const [condition, setCondition] = useState('Good');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CompsResponse | null>(null);
-  const [showAutofill, setShowAutofill] = useState(false);
-
-  const searchContainerRef = useRef<HTMLDivElement>(null);
-
-  // Close autofill dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setShowAutofill(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Filter autofill suggestions based on query
-  const suggestions = POPULAR_AUTOFILL_ITEMS.filter((item) => {
-    if (!query.trim()) return true;
-    return (
-      item.title.toLowerCase().includes(query.toLowerCase()) ||
-      item.brand.toLowerCase().includes(query.toLowerCase()) ||
-      item.category.toLowerCase().includes(query.toLowerCase())
-    );
-  }).slice(0, 5);
 
   const executeSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) return;
 
     setLoading(true);
-    setShowAutofill(false);
     try {
       const res = await fetch('/api/comps/fetch', {
         method: 'POST',
@@ -68,12 +42,6 @@ export const CompsValuationView: React.FC = () => {
     executeSearch(query);
   };
 
-  const handleSelectSuggestion = (suggestion: AutofillSuggestion) => {
-    setQuery(suggestion.title);
-    if (suggestion.category) setCategory(suggestion.category);
-    executeSearch(suggestion.title);
-  };
-
   return (
     <div className="space-y-6">
       
@@ -90,9 +58,9 @@ export const CompsValuationView: React.FC = () => {
             Compare loose, CIB, sealed, and graded values across eBay, Depop, and Poshmark before buying or listing.
           </p>
 
-          {/* Search Form with Instant Autofill Dropdown */}
+          {/* Clean Search Form */}
           <form onSubmit={handleFormSubmit} className="space-y-3 pt-2">
-            <div className="relative text-left" ref={searchContainerRef}>
+            <div className="relative text-left">
               
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -100,11 +68,7 @@ export const CompsValuationView: React.FC = () => {
                   type="text"
                   placeholder="Type item, brand, or model (e.g. Pacman Fever, Air Jordan 1, Game Boy)..."
                   value={query}
-                  onFocus={() => setShowAutofill(true)}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setShowAutofill(true);
-                  }}
+                  onChange={(e) => setQuery(e.target.value)}
                   className="w-full pl-12 pr-32 py-3.5 bg-white text-slate-900 placeholder-slate-400 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-emerald-500/30 shadow-md"
                 />
                 <button
@@ -116,42 +80,6 @@ export const CompsValuationView: React.FC = () => {
                   <span>Fetch Comps</span>
                 </button>
               </div>
-
-              {/* Instant Autofill Suggestions Dropdown */}
-              {showAutofill && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 text-slate-900">
-                  <div className="px-3.5 py-2 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex justify-between items-center">
-                    <span>Autofill Suggestions</span>
-                    <span>Click to Lookup Comps</span>
-                  </div>
-                  {suggestions.map((s, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => handleSelectSuggestion(s)}
-                      className="p-3 flex items-center justify-between hover:bg-emerald-50/60 transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img src={s.imageUrl} alt={s.title} className="w-10 h-10 rounded-lg object-cover border border-slate-200" />
-                        <div>
-                          <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-1">
-                            {s.title}
-                          </div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                            <span>{s.brand}</span>
-                            <span>•</span>
-                            <span className="bg-slate-100 px-1.5 py-0.2 rounded text-slate-700 font-semibold">{s.category}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-xs font-black text-emerald-700">~${s.estimatedPrice}</div>
-                        <span className="text-[10px] text-slate-400">On {s.platform}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
             </div>
 

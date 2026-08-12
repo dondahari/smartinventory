@@ -1,4 +1,4 @@
-import { CompsResponse, ResalePlatform, PriceChartingTiers, AutofillSuggestion } from '@/types/inventory';
+import { CompsResponse, ResalePlatform, PriceChartingTiers } from '@/types/inventory';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface FetchCompsParams {
@@ -42,18 +42,6 @@ export function getRepresentativeProductImage(query: string): string {
   
   return 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=800&q=80'; // Vintage Jacket Default
 }
-
-// Popular Resale Auto-Suggest Items Database
-export const POPULAR_AUTOFILL_ITEMS: AutofillSuggestion[] = [
-  { title: 'Pac-Man Fever Vinyl LP Album (1982)', category: 'Collectibles', brand: 'Columbia Records', estimatedPrice: 14, imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
-  { title: 'Air Jordan 1 High OG "Chicago Lost & Found"', category: 'Sneakers', brand: 'Nike / Jordan', estimatedPrice: 410, imageUrl: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
-  { title: 'Sony Walkman TPS-L2 Cassette Player', category: 'Electronics', brand: 'Sony', estimatedPrice: 340, imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
-  { title: 'Nintendo Game Boy Color Atomic Purple', category: 'Electronics', brand: 'Nintendo', estimatedPrice: 95, imageUrl: 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
-  { title: 'Hermès Silk Twill Scarf "Bride de Gala"', category: 'Designer & Luxury', brand: 'Hermès', estimatedPrice: 280, imageUrl: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?auto=format&fit=crop&w=800&q=80', platform: 'Poshmark' },
-  { title: 'Vintage 90s Champion Reverse Weave Hoodie', category: 'Vintage Clothing', brand: 'Champion', estimatedPrice: 85, imageUrl: 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=800&q=80', platform: 'Depop' },
-  { title: 'Pokémon Red Version Game Boy Cartridge', category: 'Collectibles', brand: 'Nintendo', estimatedPrice: 65, imageUrl: 'https://images.unsplash.com/photo-1531525645387-7f14be1bbe97?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
-  { title: 'Super Mario Bros 3 NES Cartridge', category: 'Collectibles', brand: 'Nintendo', estimatedPrice: 22, imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80', platform: 'eBay' },
-];
 
 export async function fetchLiveComps({
   itemTitle,

@@ -81,12 +81,3 @@ export interface AutoTagResult {
   description: string;
   tags: string[];
 }
-
-export interface AutofillSuggestion {
-  title: string;
-  category: string;
-  brand: string;
-  estimatedPrice: number;
-  imageUrl: string;
-  platform: ResalePlatform;
-}
